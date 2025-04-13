@@ -10,10 +10,8 @@ import glob
 from detector import detect_damage, estimate_position_cm, load_model
 
 # === Setup Paths ===
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-MODEL_DIR = os.path.join(BASE_DIR, 'models')
-OLD_MODEL_PATH = os.path.join(MODEL_DIR, 'old_best.pt')
-NEW_MODEL_PATH = os.path.join(MODEL_DIR, 'new_best.pt')
+OLD_MODEL_PATH = "models/old_best.pt"
+NEW_MODEL_PATH = "models/new_best.pt"
 
 # === Load Models Once ===
 old_model = load_model(OLD_MODEL_PATH)
@@ -84,7 +82,43 @@ with tab1:
             st.session_state.results = all_results
 
     elif input_mode == "Webcam":
-        st.warning("Webcam preview not supported. Please use image/video upload.")
+        st.header("🧠 Real-Time Webcam Feed")
+        st.warning("Press the button below to start webcam feed.")
+
+        # Button to trigger webcam feed
+        if st.button("Start Webcam"):
+            cap = cv2.VideoCapture(0)  # 0 means the default webcam
+
+            # Check if the webcam is opened
+            if not cap.isOpened():
+                st.error("Could not open webcam.")
+            else:
+                stframe = st.empty()  # Create an empty container for real-time video
+                all_results = []
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        st.error("Failed to grab frame.")
+                        break
+
+                    # Apply defect detection to the current frame
+                    annotated_frame, results = detect_damage(frame, new_model)
+
+                    # Convert the frame (BGR) to RGB for Streamlit display
+                    annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+
+                    # Show the frame in the Streamlit app
+                    stframe.image(annotated_frame_rgb, channels="RGB", use_column_width=True)
+
+                    # Optionally, process additional info or store results
+                    for result in results:
+                        result["position_cm"] = estimate_position_cm(result["center"], frame_index=0, fps=30)
+                        result["source"] = "webcam"
+                    all_results.extend(results)
+
+                st.session_state.inputs = [("webcam", all_results)]
+                st.session_state.results = all_results
+                cap.release()
 
     elif input_mode == "Image Folder":
         zip_file = st.file_uploader("Upload a ZIP folder of images", type=["zip"])
